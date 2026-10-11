@@ -1,0 +1,18 @@
+import { useMemo, useState } from 'react'
+import { Download, Filter, Search } from 'lucide-react'
+import { useStakeion } from '../context/StakeionContext'
+import { AssetCell, EmptyState, money, PageHeader, PanelHeader, ServiceState, StatusBadge, WalletCell } from '../components/Common'
+
+export default function Ledger() {
+  const { ledger, wallets, status: serviceStatus, error, refresh } = useStakeion()
+  const [type, setType] = useState('All')
+  const [status, setStatus] = useState('All')
+  const [search, setSearch] = useState('')
+  const filtered = useMemo(() => ledger.filter((entry) => (type === 'All' || entry.type === type) && (status === 'All' || entry.status === status) && `${entry.id} ${entry.tx} ${entry.symbol}`.toLowerCase().includes(search.toLowerCase())), [ledger, search, status, type])
+  if (serviceStatus !== 'ready') return <><PageHeader eyebrow="Account activity" title="Activity" description="Loading your account activity."/><ServiceState status={serviceStatus} error={error} onRetry={refresh}/></>
+  return <>
+    <PageHeader eyebrow="Account activity" title="Activity" description="Every deposit, withdrawal, reward, and stake is recorded here." action={<button className="button secondary"><Download size={16}/>Export CSV</button>}/>
+    <section className="ledger-summary"><div><span>Total entries</span><strong>{ledger.length}</strong></div><div><span>Completed</span><strong>{ledger.filter((entry) => entry.status === 'Completed').length}</strong></div><div><span>In progress</span><strong>{ledger.filter((entry) => entry.status !== 'Completed').length}</strong></div></section>
+    <section className="panel"><PanelHeader title="Transaction history" meta={`${filtered.length} entries`} action={<label className="search-box"><Search size={16}/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search asset or transaction"/></label>}/><div className="ledger-filters"><Filter size={15}/><select value={type} onChange={(event) => setType(event.target.value)}><option>All</option>{['Deposit','Withdrawal','Stake','Unstake','Reward','Fee','Adjustment'].map((item) => <option key={item}>{item}</option>)}</select><select value={status} onChange={(event) => setStatus(event.target.value)}><option>All</option>{['Confirming','Processing','Completed','Failed','Cancelled'].map((item) => <option key={item}>{item}</option>)}</select></div>{filtered.length === 0 ? <EmptyState title="No activity yet" detail="Your deposits, rewards, and withdrawals will appear here."/> : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Asset</th><th>Amount</th><th>USD value</th><th>Wallet</th><th>Status</th><th>Transaction</th></tr></thead><tbody>{filtered.map((entry) => { const wallet = wallets.find((item) => item.id === (entry.walletId || entry.wallet_id)); const date = entry.date || entry.created_at; return <tr key={entry.id}><td><strong>{new Date(date).toLocaleDateString()}</strong><small>{new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></td><td><span className={`ledger-type type-${entry.type.toLowerCase()}`}>{entry.type}</span></td><td><AssetCell symbol={entry.symbol} compact/></td><td className={entry.amount > 0 ? 'positive' : ''}><strong>{entry.amount > 0 ? '+' : ''}{entry.amount} {entry.symbol}</strong></td><td>{money(Math.abs(Number(entry.amount_usd || entry.usdValue || 0)))}</td><td><WalletCell wallet={wallet}/></td><td><StatusBadge status={entry.status}/></td><td><code>{entry.tx || entry.tx_hash || entry.transactionId}</code></td></tr>})}</tbody></table></div>}</section>
+  </>
+}
